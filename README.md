@@ -6,18 +6,49 @@
 
 ```mermaid
 graph TD
-    subgraph Jetson Orin [On-Board Edge AI - Jetson Orin]
-        A[Κάμερα] -->|YOLOv8| B(Vision FSM)
-        M[Μικρόφωνο] -->|g1_mic| C(Speech-to-Text)
-        B -->|Άνθρωπος Εντοπίστηκε| D{Κεντρικός Εγκέφαλος}
-        C -->|Ηχητικό Κείμενο| D
-        D -->|System Prompt| E[Gemini 1.5 Flash API]
-        E -->|Απάντηση| F(Edge-TTS)
-        F -->|g1_speaker| S[Ηχείο G1]
+    %% Input Sources
+    subgraph Inputs ["Αισθητήρες (Inputs)"]
+        Camera["Κάμερα"]
+        Mic["Μικρόφωνο"]
     end
-    subgraph Unitree G1 Hardware
-        D -->|SDK2| L[Έλεγχος LED & Κίνηση]
+
+    %% Processing & Edge AI
+    subgraph EdgeAI ["On-Board Edge AI (Jetson Orin)"]
+        Yolo["YOLOv8"]
+        VisionFSM["Vision FSM"]
+        StT["Speech-to-Text"]
+        Brain["Κεντρικός Εγκέφαλος"]
     end
+
+    %% Cloud / External AI
+    subgraph Cloud ["Cloud Services"]
+        Gemini["Gemini 1.5 Flash API"]
+    end
+
+    %% Outputs & Actuators
+    subgraph Outputs ["Hardware & Outputs"]
+        TTS["Edge-TTS"]
+        Speaker["Ηχείο G1"]
+        Hardware["Unitree G1 Hardware (LED & Κίνηση)"]
+    end
+
+    %% Connections
+    Camera -->|YOLOv8| VisionFSM
+    Mic -->|g1_mic| StT
+    
+    VisionFSM -->|Άνθρωπος Εντοπίστηκε| Brain
+    StT -->|Ηχητικό Κείμενο| Brain
+
+    Brain -->|SDK2| Hardware
+    Brain -->|System Prompt| Gemini
+    
+    Gemini -->|Απάντηση| TTS
+    TTS -->|g1_speaker| Speaker
+
+    %% Styling
+    style Brain fill:#333,stroke:#fff,stroke-width:2px;
+    style Gemini fill:#d86b00,stroke:#fff,stroke-width:1px;
+    style EdgeAI fill:#1e1e1e,stroke:#555,stroke-width:1px;
 ```
 
 ---
