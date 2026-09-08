@@ -6,49 +6,45 @@
 
 ```mermaid
 graph TD
-    %% Input Sources
-    subgraph Inputs ["Αισθητήρες (Inputs)"]
-        Camera["Κάμερα"]
-        Mic["Μικρόφωνο"]
+    %% Ορισμός Στυλ (Χρώματα συμβατά με GitHub Dark/Light mode)
+    classDef hardware fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff;
+    classDef software fill:#2b6cb0,stroke:#63b3ed,stroke-width:2px,color:#fff;
+    classDef brain fill:#276749,stroke:#68d391,stroke-width:2px,color:#fff;
+    classDef cloud fill:#c05621,stroke:#fbd38d,stroke-width:2px,color:#fff;
+
+    subgraph Inputs [📡 Αισθητήρες]
+        Cam[📷 Κάμερα]:::hardware
+        Mic[🎤 Μικρόφωνο]:::hardware
     end
 
-    %% Processing & Edge AI
-    subgraph EdgeAI ["On-Board Edge AI (Jetson Orin)"]
-        Yolo["YOLOv8"]
-        VisionFSM["Vision FSM"]
-        StT["Speech-to-Text"]
-        Brain["Κεντρικός Εγκέφαλος"]
+    subgraph EdgeAI [🧠 On-Board Edge AI - Jetson Orin]
+        VFSM(👁️ YOLOv8 & Vision FSM):::software
+        STT(🗣️ Speech-to-Text):::software
+        Brain{🤖 Κεντρικός Εγκέφαλος}:::brain
     end
 
-    %% Cloud / External AI
-    subgraph Cloud ["Cloud Services"]
-        Gemini["Gemini 1.5 Flash API"]
+    subgraph Cloud [☁️ Cloud Services]
+        LLM[⚡ Gemini 1.5 Flash API]:::cloud
     end
 
-    %% Outputs & Actuators
-    subgraph Outputs ["Hardware & Outputs"]
-        TTS["Edge-TTS"]
-        Speaker["Ηχείο G1"]
-        Hardware["Unitree G1 Hardware (LED & Κίνηση)"]
+    subgraph Hardware [⚙️ Αντίδραση & Hardware]
+        TTS(🔊 Edge-TTS):::software
+        Spk[📢 Ηχείο G1]:::hardware
+        Ctrl[🦾 Έλεγχος LED & Κίνηση]:::hardware
     end
 
-    %% Connections
-    Camera -->|YOLOv8| VisionFSM
-    Mic -->|g1_mic| StT
-    
-    VisionFSM -->|Άνθρωπος Εντοπίστηκε| Brain
-    StT -->|Ηχητικό Κείμενο| Brain
+    %% Ροή Δεδομένων (Δηλώνονται στο τέλος για τέλεια στοίχιση)
+    Cam -.-> VFSM
+    Mic -->|g1_mic pipe| STT
 
-    Brain -->|SDK2| Hardware
-    Brain -->|System Prompt| Gemini
-    
-    Gemini -->|Απάντηση| TTS
-    TTS -->|g1_speaker| Speaker
+    VFSM -->|Άνθρωπος Εντοπίστηκε| Brain
+    STT -->|Ηχητικό Κείμενο| Brain
 
-    %% Styling
-    style Brain fill:#333,stroke:#fff,stroke-width:2px;
-    style Gemini fill:#d86b00,stroke:#fff,stroke-width:1px;
-    style EdgeAI fill:#1e1e1e,stroke:#555,stroke-width:1px;
+    Brain ==>|System Prompt & Context| LLM
+    Brain -->|unitree_sdk2py| Ctrl
+
+    LLM ==>|Φυσική Απάντηση| TTS
+    TTS -->|g1_spk pipe| Spk
 ```
 
 ---
