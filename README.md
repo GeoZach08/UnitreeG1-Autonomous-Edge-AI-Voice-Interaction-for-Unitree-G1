@@ -1,191 +1,196 @@
 # Project Babis: Autonomous Edge AI & Voice Interaction for Unitree G1
 
-Το "Project Babis" αποτελεί ένα ολοκληρωμένο, αυτόνομο σύστημα οπτικοακουστικής αλληλεπίδρασης (Edge AI) για το ερευνητικό ανθρωποειδές ρομπότ Unitree G1 EDU. Το σύστημα αναπτύχθηκε στο **Sense Lab (Πολυτεχνείο Κρήτης)** και είναι ειδικά βελτιστοποιημένο για φυσική επικοινωνία στην Ελληνική γλώσσα.
+"Project Babis" is a comprehensive, fully autonomous audiovisual interaction (Edge AI) system developed for the **Unitree G1 EDU** research humanoid robot. Created at the **Sense Lab (Technical University of Crete)**, this system transforms the robot into a conversational AI entity capable of fluid, bilingual interaction (Greek & English).
 
-Επιτρέπει στο ρομπότ να ανιχνεύει ανθρώπινη παρουσία μέσω κάμερας (YOLOv8), να μετατρέπει την ομιλία σε κείμενο (STT), να παράγει απαντήσεις με φυσική γλώσσα (LLM) και να εκφωνεί το αποτέλεσμα (TTS). Ολόκληρο το σύστημα εκτελείται on-board (εγγενώς) στον υπολογιστή τεχνητής νοημοσύνης του ρομπότ (Jetson Orin).
+It enables the robot to detect human presence via its onboard camera (YOLOv8), transcribe speech-to-text (STT), generate natural language responses (LLM), and synthesize realistic speech (TTS). The entire software pipeline runs natively (on-board) on the robot's internal AI computer (Nvidia Jetson Orin).
 
 ```mermaid
 graph TD
-    %% Ορισμός Στυλ (Χρώματα συμβατά με GitHub Dark/Light mode)
+    %% Styling customized for GitHub Dark/Light themes
     classDef hardware fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff;
     classDef software fill:#2b6cb0,stroke:#63b3ed,stroke-width:2px,color:#fff;
     classDef brain fill:#276749,stroke:#68d391,stroke-width:2px,color:#fff;
     classDef cloud fill:#c05621,stroke:#fbd38d,stroke-width:2px,color:#fff;
+    classDef decision fill:#805ad5,stroke:#b794f4,stroke-width:2px,color:#fff;
 
-    subgraph Inputs [📡 Αισθητήρες]
-        Cam[📷 Κάμερα]:::hardware
-        Mic[🎤 Μικρόφωνο]:::hardware
+    subgraph Inputs [📡 Sensors & Inputs]
+        Cam[📷 Camera]:::hardware
+        Mic[🎤 Microphone]:::hardware
     end
 
     subgraph EdgeAI [🧠 On-Board Edge AI - Jetson Orin]
         VFSM(👁️ YOLOv8 & Vision FSM):::software
         STT(🗣️ Speech-to-Text):::software
-        Brain{🤖 Κεντρικός Εγκέφαλος}:::brain
+        Brain{🤖 Central FSM Brain}:::brain
+        LangCheck{🌐 Dynamic Language Router}:::decision
     end
 
     subgraph Cloud [☁️ Cloud Services]
         LLM[⚡ Gemini 1.5 Flash API]:::cloud
     end
 
-    subgraph Hardware [⚙️ Αντίδραση & Hardware]
-        TTS(🔊 Edge-TTS):::software
-        Spk[📢 Ηχείο G1]:::hardware
-        Ctrl[🦾 Έλεγχος LED & Κίνηση]:::hardware
+    subgraph Hardware [⚙️ Actuation & Outputs]
+        TTS_GR(🔊 Edge-TTS: Greek):::software
+        TTS_EN(🔊 Edge-TTS: English):::software
+        Spk[📢 G1 Speaker]:::hardware
+        Ctrl[🦾 LED & Motion Control]:::hardware
     end
 
-    %% Ροή Δεδομένων (Δηλώνονται στο τέλος για τέλεια στοίχιση)
-    Cam -.-> VFSM
+    %% Data Flow
+    Cam -.->|Frames| VFSM
     Mic -->|g1_mic pipe| STT
 
-    VFSM -->|Άνθρωπος Εντοπίστηκε| Brain
-    STT -->|Ηχητικό Κείμενο| Brain
+    VFSM -->|Human Detected| Brain
+    STT -->|Transcribed Text| Brain
 
     Brain ==>|System Prompt & Context| LLM
     Brain -->|unitree_sdk2py| Ctrl
 
-    LLM ==>|Φυσική Απάντηση| TTS
-    TTS -->|g1_spk pipe| Spk
+    LLM ==>|Natural Language Response| LangCheck
+    LangCheck -->|Contains English| TTS_EN
+    LangCheck -->|Greek Only| TTS_GR
+    
+    TTS_GR -->|g1_spk pipe| Spk
+    TTS_EN -->|g1_spk pipe| Spk
 ```
 
 ---
 
-## ⚙️ Ροή Λειτουργίας & Αλληλεπίδραση (System Operation)
+## ⚙️ System Operation & Interaction Flow
 
-Το σύστημα βασίζεται σε μια Μηχανή Πεπερασμένων Καταστάσεων (Finite State Machine - FSM) που διαχειρίζεται τη συμπεριφορά του ρομπότ, τα όρια συζήτησης και την οπτική ανατροφοδότηση μέσω των LED του προσώπου. 
+The system revolves around a Finite State Machine (FSM) that manages the robot's behavior, conversational boundaries, and visual feedback via its facial LEDs.
 
-### 1. Οπτική Ανατροφοδότηση (LED States)
-Η κατάσταση του ρομπότ υποδεικνύεται ανά πάσα στιγμή από το χρώμα των LED:
-*   🔵 **Μπλε (Standby):** Το ρομπότ βρίσκεται σε κατάσταση αναμονής. Περιμένει είτε να ανιχνεύσει άνθρωπο μέσω της κάμερας, είτε να ακούσει το Wake Word.
-*   🟢 **Πράσινο (Auto Mode / Listening):** Το μικρόφωνο είναι ενεργό και το ρομπότ καταγράφει την ομιλία του χρήστη.
-*   🟣 **Μωβ (Processing / Speaking):** Το σύστημα επεξεργάζεται το ηχητικό σήμα, επικοινωνεί με το LLM ή εκφωνεί την απάντηση.
+### 1. Visual Feedback (LED States)
+The robot's current state is always indicated by its facial LEDs:
+*   🔵 **Blue (Standby):** The robot is idle, waiting either to detect a human via the camera or to hear the predefined Wake Word.
+*   🟢 **Green (Auto Mode / Listening):** The microphone is active, and the robot is actively recording the user's speech.
+*   🟣 **Purple (Processing / Speaking):** The system is processing audio, communicating with the LLM, or currently speaking the response.
 
-### 2. Ανίχνευση & Έναρξη Συζήτησης
-Όταν το μοντέλο YOLOv8 εντοπίσει άνθρωπο σε κοντινή απόσταση, το ρομπότ πραγματοποιεί τον αρχικό χαιρετισμό εκφωνώντας ένα προκαθορισμένο μήνυμα, ενώ παράλληλα σηκώνει το χέρι του ("high wave"). Μετά τον χαιρετισμό, τα LED γίνονται πράσινα και το ρομπότ εισέρχεται σε "Auto Mode", περιμένοντας την πρώτη ερώτηση.
+### 2. Detection & Greeting
+When the YOLOv8 model detects a person at close range, the robot performs an initial greeting by speaking a predefined phrase while raising its arm ("high wave"). Following the greeting, the LEDs turn green, and the robot enters "Auto Mode," awaiting the user's first question.
 
-### 3. Όρια Διαλόγου & Timeout
-Για την αποφυγή συνεχούς και άσκοπης καταγραφής θορύβου, έχουν τεθεί συγκεκριμένοι περιορισμοί:
-*   **Όριο Ερωτήσεων:** Σε κατάσταση Auto Mode, ο χρήστης μπορεί να κάνει έως και **6 συνεχόμενες ερωτήσεις** (`MAX_CONSECUTIVE_AUTO_QUESTIONS`). Μετά την 6η απάντηση, το ρομπότ επιστρέφει σε κατάσταση Standby (Μπλε LED).
-*   **Timeout Αδράνειας:** Εάν το ρομπότ βρίσκεται σε Auto Mode αλλά δεν εντοπίσει ομιλία για **12 δευτερόλεπτα** (`AUTO_QUESTION_TIMEOUT`), το σύστημα μεταπίπτει σε κατάσταση Standby.
+### 3. Conversation Limits & Timeout
+To prevent endless recording of background noise, specific limits are enforced:
+*   **Question Limit:** In Auto Mode, the user can ask up to **6 consecutive questions** (`MAX_CONSECUTIVE_AUTO_QUESTIONS`). After the 6th answer, the robot gracefully returns to Standby (Blue LEDs).
+*   **Idle Timeout:** If the robot is in Auto Mode but detects no speech for **12 seconds** (`AUTO_QUESTION_TIMEOUT`), it automatically falls back to Standby.
 
-### 4. Λειτουργία Wake Word
-Όταν το ρομπότ βρίσκεται σε κατάσταση Standby (Μπλε), ο χρήστης μπορεί να επανεκκινήσει τη συζήτηση προφέροντας το Wake Word. Το σύστημα αναγνωρίζει λέξεις-κλειδιά ("μπαμπ", "Μπάμπη", "Babi") και παραφθορές αυτών. Εφόσον το Wake Word αναγνωριστεί, τα LED γίνονται πράσινα και το ρομπότ περιμένει την ερώτηση.
+### 4. Wake Word Activation
+While in Standby (Blue), the user can re-initiate a conversation by saying the Wake Word. The system recognizes keywords (e.g., "Babi", "Mpampi") and common variations. Upon recognition, the LEDs turn green, and the robot listens for a query.
 
-### 5. Ολική Επαναφορά (Absence Reset)
-Εάν δεν ανιχνευθεί άνθρωπος στο οπτικό πεδίο της κάμερας για 15 συνεχόμενα δευτερόλεπτα (`reset_timeout`), το σύστημα κάνει reset το state (`has_greeted = False`) και επιστρέφει σε αρχική κατάσταση, έτοιμο να χαιρετήσει τον επόμενο χρήστη που θα πλησιάσει.
-
----
-
-## 🏗️ Εξέλιξη Αρχιτεκτονικής (Architecture Evolution)
-
-Η ανάπτυξη του συστήματος πραγματοποιήθηκε σε δύο διακριτές φάσεις:
-
-*   **Φάση 1: Κατανεμημένο Σύστημα (Windows & Linux μέσω UDP)**
-    Η αρχική υλοποίηση βασίστηκε σε διαχωρισμό του υπολογιστικού φόρτου. Η λογική επεξεργασία (STT, LLM, TTS) εκτελούνταν σε εξωτερικό σταθμό εργασίας (Windows PC), ενώ το Jetson Orin του ρομπότ (Linux) διαχειριζόταν αποκλειστικά την όραση υπολογιστή (YOLO) και τον έλεγχο υλικού (Unitree SDK). Η επικοινωνία πραγματοποιούνταν μέσω δικτυακών πακέτων UDP. Αυτή η προσέγγιση απορρίφθηκε, διότι η δικτυακή εξάρτηση εισήγαγε καθυστερήσεις (network latency), απώλεια πακέτων και ακύρωνε την πλήρη αυτονομία του ρομπότ.
-*   **Φάση 2: Πλήρως On-Board Edge AI (Τελική Υλοποίηση)**
-    Με γνώμονα την εξάλειψη των καθυστερήσεων, ολόκληρο το software pipeline ενοποιήθηκε και μεταφέρθηκε (ported) ώστε να εκτελείται εγγενώς στο Ubuntu περιβάλλον του Nvidia Jetson. Το ρομπότ λειτουργεί πλέον ως πλήρως ανεξάρτητη υπολογιστική μονάδα.
+### 5. Absence Reset (Global Reset)
+If no human is detected in the camera's field of view for 15 consecutive seconds (`reset_timeout`), the system resets its state (`has_greeted = False`). It returns to its initial configuration, ready to greet the next person who approaches.
 
 ---
 
-## 🔬 Έρευνα & Ανάπτυξη (Tech Stack & R&D)
+## 🏗️ Architecture Evolution
 
-Η ανάπτυξη εστίασε στη χρήση εργαλείων μηδενικού λειτουργικού κόστους (Zero-Cost Strategy), απορρίπτοντας τοπικά μοντέλα (όπως Ollama/Llama 3 και Whisper) λόγω των υψηλών απαιτήσεων σε πόρους που προκαλούσαν καθυστερήσεις άνω των 4 δευτερολέπτων (time-to-first-token) και θερμικό throttling στο Jetson.
+The system was developed in two distinct phases:
 
-Το τελικό βελτιστοποιημένο Tech Stack διαμορφώθηκε ως εξής:
-*   **Όραση (Vision):** `ultralytics` (YOLOv8-nano) για real-time ανίχνευση ανθρώπου (inference time < 30ms).
-*   **Αναγνώριση Ομιλίας (STT):** Βιβλιοθήκη `SpeechRecognition` με χρήση του Google API για ακαριαία μεταγραφή.
-*   **Παραγωγή Λόγου (LLM):** Google Gemini 1.5 Flash μέσω API (Free-Tier). Έχει ρυθμιστεί με Custom System Prompt, αναλαμβάνοντας την περσόνα του εργαστηρίου.
-*   **Σύνθεση Φωνής (TTS):** Μηχανή `edge-tts` (Microsoft Edge Text-to-Speech) για φυσική απόδοση στα Ελληνικά (`el-GR-NestorasNeural`), απορρίπτοντας λύσεις όπως το Piper TTS λόγω έντονης μηχανικής χροιάς.
-*   **Έλεγχος Υλικού (Hardware Control):** Επίσημο `unitree_sdk2py` για τον έλεγχο των βραχιόνων και των LED.
+*   **Phase 1: Distributed System (Windows & Linux via UDP)**
+    The initial implementation split the computational load. Logic processing (STT, LLM, TTS) ran on an external Windows PC, while the robot's Jetson Orin (Linux) handled computer vision (YOLO) and hardware control (Unitree SDK). This approach was abandoned due to network latency, packet loss, and the loss of true autonomy.
+*   **Phase 2: Fully On-Board Edge AI (Final Implementation)**
+    To eliminate latency, the entire software pipeline was unified and ported to run natively within the Nvidia Jetson's Ubuntu environment. The robot now operates as a 100% independent edge computing unit.
 
 ---
 
-## 🛠️ Τεχνικές Προκλήσεις & Επιλύσεις
+## 🔬 Tech Stack & R&D
 
-Η υλοποίηση του συστήματος απαίτησε την επίλυση σειράς προβλημάτων σε επίπεδο λειτουργικού συστήματος (Linux System Engineering) και επεξεργασίας φυσικής γλώσσας (NLP):
+Development prioritized a Zero-Cost Strategy, favoring high-speed APIs over local models (like Ollama/Llama 3 or Whisper) which caused unacceptable latency (>4 seconds time-to-first-token) and thermal throttling on the Jetson.
 
-1.  **Περιορισμοί Ελληνικής Γλώσσας (NLP Limitations):** 
-    Τα συστήματα STT και TTS παρουσίαζαν αδυναμίες στην ορθή προφορά αγγλικών ακρωνυμίων. Η επίλυση επιτεύχθηκε μέσω αυστηρού Prompt Engineering. Στο System Prompt δόθηκε ρητή εντολή στο LLM να αποδίδει κάθε ξενόγλωσσο όρο αποκλειστικά φωνητικά με ελληνικούς χαρακτήρες (π.χ. "Σενς Λαμπ", "Έρμπας"). 
-2.  **Διαχείριση Δρομολόγησης Ήχου (PulseAudio Routing):** 
-    Η αρχιτεκτονική του ρομπότ διαχωρίζει το υλικό ήχου (ηχείο/μικρόφωνα στο PC1) από τη μονάδα επεξεργασίας (Jetson στο PC2). Χρησιμοποιήθηκε ένα custom bridge (G1 Audio Driver) που γεφυρώνει τα PCs μέσω Multicast UDP και DDS PlayStream RPC, δημιουργώντας τις εικονικές συσκευές `g1_microphone` και `g1_speaker`. Για την αποφυγή λανθασμένης δρομολόγησης, προστέθηκαν εντολές συστήματος (`pactl set-default-sink/source`) εντός του κώδικα Python και χρησιμοποιήθηκε η μεταβλητή `PULSE_SINK` στο subprocess του `ffplay`. Ο ήχος χρησιμοποιεί αυστηρά το format `s16le` (16,000 Hz, 1 κανάλι, 16-bit).
-3.  **Διαχείριση Σφαλμάτων ALSA (Error Suppression):** 
-    Κατά την προετοιμασία των ροών ήχου, η βιβλιοθήκη `PyAudio` παρήγαγε συνεχή μηνύματα σφάλματος (`snd_pcm_open_noupdate`) στο standard output. Η αντιμετώπιση έγινε με τη δημιουργία ενός null error handler σε γλώσσα C, ο οποίος φορτώθηκε μέσω της βιβλιοθήκης `ctypes`, καταστέλλοντας τις προειδοποιήσεις σε επίπεδο μνήμης.
-4.  **Κλείδωμα Μικροφώνου (Hardware Privacy):** 
-    Το μικρόφωνο του ρομπότ παραμένει απενεργοποιημένο από το εργοστασιακό υλικολογισμικό. Απαιτείται η ρητή ενεργοποίηση του "Voice Assistant" μέσω της επίσημης εφαρμογής της Unitree για την εκκίνηση της ροής δεδομένων (αλλάζοντας το mode μέσω του API 1008).
-5.  **Σταθεροποίηση Οπτικής Ένδειξης (LED Keep-Alive):** 
-    Το εσωτερικό δίκτυο DDS του ρομπότ επαναφέρει αυτόματα τα LED στο προεπιλεγμένο λευκό χρώμα. Για την επιβολή του δικού μας οπτικού UI, υλοποιήθηκε ένα ανεξάρτητο νήμα (thread) με μηχανισμό `threading.Lock()`, το οποίο αποστέλλει το επιθυμητό χρώμα στο SDK ανά 0,5 δευτερόλεπτα, εξασφαλίζοντας σταθερότητα.
+The optimized Tech Stack is as follows:
+*   **Vision:** `ultralytics` (YOLOv8-nano) for real-time human detection (inference time < 30ms).
+*   **Speech-to-Text (STT):** `SpeechRecognition` library utilizing the Google API for near-instant transcription.
+*   **Large Language Model (LLM):** Google Gemini 1.5 Flash via API (Free-Tier), configured with a highly specific Custom System Prompt to adopt the lab's persona.
+*   **Text-to-Speech (TTS):** `edge-tts` (Microsoft Edge Neural Voices) for highly realistic phonetic rendering.
+*   **Hardware Control:** Official `unitree_sdk2py` for arm articulation and LED manipulation.
 
 ---
 
-## 📂 Δομή Κώδικα
-*   `config.py`: Αρχείο παραμετροποίησης, κωδικών API, ορισμού δικτυακών διεπαφών και του System Prompt.
-*   `llm.py`: Ασύγχρονη διαχείριση API calls προς το Gemini μέσω `ThreadPoolExecutor` και fallback απαντήσεων.
-*   `robot_control.py`: Αρχικοποίηση Unitree SDK, έλεγχος LED, λειτουργία κίνησης χεριών και αναπαραγωγή ήχου.
-*   `main.py`: Ο κεντρικός βρόχος ελέγχου (FSM). Συντονίζει την όραση (OpenCV/YOLOv8), την καταγραφή ήχου, τα νήματα ελέγχου και τις μεταβάσεις καταστάσεων.
+## 🛠️ Technical Challenges & Solutions
+
+Implementing this pipeline natively on the G1 required solving several Linux System Engineering and NLP challenges:
+
+1.  **Bilingual Support & NLP Routing (Dynamic TTS):** 
+    Supporting both Greek and English naturally was a major hurdle. A "Language Router" was developed using Regex to scan the LLM's output for Latin characters. If English text is detected, the system dynamically switches the TTS voice to an American neural profile (`en-US-ChristopherNeural`), otherwise defaulting to Greek (`el-GR-NestorasNeural`). Smart Prompt Engineering ensures the LLM handles mixed-language microphone transcriptions (Greeklish) without crashing the TTS engine.
+2.  **Audio Routing (PulseAudio Bridge):** 
+    The robot physically separates its audio hardware (PC1) from its AI computer (Jetson on PC2). A custom bridge (G1 Audio Driver) was utilized to bridge the PCs via Multicast UDP and DDS PlayStream RPC, exposing virtual devices `g1_microphone` and `g1_speaker`. Explicit `pactl` commands and `PULSE_SINK` environment variables force all Python subprocesses (`ffplay`) to route audio strictly to the robot's physical hardware.
+3.  **ALSA Error Suppression:** 
+    During audio stream initialization, `PyAudio` flooded the standard output with C-level ALSA warnings (`snd_pcm_open_noupdate`). This was handled by injecting a custom null error handler in C, loaded via Python's `ctypes` library, suppressing the warnings at the memory level.
+4.  **Microphone Privacy Lock:** 
+    The factory firmware keeps the microphone physically disabled. It requires explicit activation of the "Voice Assistant" mode via the official Unitree mobile app (API 1008 toggle) before any audio data can be captured via Python.
+5.  **LED Keep-Alive Mechanism:** 
+    The robot's internal DDS network aggressively attempts to reset the facial LEDs to their default white color. To enforce our custom UI colors (Blue/Green/Purple), a dedicated background thread with a `threading.Lock()` was implemented. This thread continuously broadcasts our desired color to the SDK every 0.5 seconds, safely overriding the firmware's default behavior.
 
 ---
 
-## 🚀 Πλήρης Οδηγός Εγκατάστασης
+## 📂 Code Structure
+*   `config.py`: Central configuration, API keys, network interfaces, and the core FSM System Prompt.
+*   `llm.py`: Asynchronous API management for Gemini using `ThreadPoolExecutor`, including local cache fallbacks.
+*   `robot_control.py`: Hardware abstraction layer (Unitree SDK initialization, LED Keep-Alive thread, motion mapping, and dynamic TTS audio playback).
+*   `main.py`: The central brain. Coordinates OpenCV/YOLOv8 vision, audio capture, state transitions, and background execution threads.
 
-> ⚠️ **ΣΗΜΑΝΤΙΚΗ ΕΠΙΣΗΜΑΝΣΗ:** Εφόσον το σύστημα λειτουργεί 100% on-board, **όλες οι παρακάτω εντολές (Βήματα 2-6) πρέπει να εκτελεστούν αποκλειστικά εντός του τερματικού του ρομπότ (Jetson)** μέσω SSH.
+---
 
-### Βήμα 1: Αρχική Σύνδεση & Ρύθμιση Wi-Fi
-1. Συνδέστε το ρομπότ στο τοπικό δίκτυο Wi-Fi μέσω της εφαρμογής **Unitree Explore**.
-2. Συνδέστε το PC σας στο ρομπότ με καλώδιο Ethernet.
-3. Ανοίξτε SSH τερματικό προς την εργοστασιακή IP του Jetson: `ssh unitree@192.168.123.164` (Κωδικός: `123`).
-4. Εκτελέστε την εντολή `ip a`, εντοπίστε την ασύρματη διεπαφή (`wlan0`) και σημειώστε τη διεύθυνση IP.
-5. Αφαιρέστε το καλώδιο Ethernet και επανασυνδεθείτε μέσω SSH στη νέα ασύρματη IP.
+## 🚀 Installation & Deployment Guide
 
-### Βήμα 2: Εγκατάσταση G1 Audio Driver (Μέσα στο Ρομπότ)
-Απαιτείται ο εγκαταστάτης του custom οδηγού ήχου (PulseAudio bridge) για τη δρομολόγηση των μικροφώνων και του ηχείου.
+> ⚠️ **IMPORTANT:** Since the system is 100% on-board, **Steps 2 through 6 must be executed directly within the robot's terminal (Jetson Orin)** via SSH.
+
+### Step 1: Initial Network Setup
+1. Connect the robot to your local Wi-Fi via the **Unitree Explore** mobile app.
+2. Connect your PC to the robot using an Ethernet cable.
+3. SSH into the Jetson's factory IP: `ssh unitree@192.168.123.164` (Password: `123`).
+4. Run `ip a`, locate the wireless interface (usually `wlan0`), and note the assigned IP address.
+5. Unplug the Ethernet cable and reconnect via SSH using the new Wi-Fi IP.
+
+### Step 2: Install the G1 Audio Driver
+Install the custom PulseAudio bridge to expose the microphone and speaker to the OS.
 ```bash
 git clone [https://github.com/experientialtech/g1-audio-driver.git](https://github.com/experientialtech/g1-audio-driver.git) ~/g1-audio-driver
 cd ~/g1-audio-driver
 ./install.sh --start
 ```
-*(Απαιτείται η ενεργοποίηση Multicast στο τοπικό δίκτυο της θύρας `eth0` στο υποδίκτυο `192.168.123.0/24`, καθώς ο οδηγός λαμβάνει δεδομένα UDP στη διεύθυνση `239.168.123.161:5555`).*
+*(Ensure Multicast is enabled on your local network, as the driver receives UDP data on `239.168.123.161:5555`).*
 
-### Βήμα 3: Εγκατάσταση Unitree SDK2 (Μέσα στο Ρομπότ)
-1. Κατεβάστε το `unitree_sdk2_python` από την Unitree στον κατάλογο του Jetson (προεπιλογή: `~/unitree-sdk2-python`).
-2. Εγκαταστήστε τη βιβλιοθήκη (`pip3 install -e .`).
-3. Βεβαιωθείτε ότι το αρχείο `config.py` έχει ρυθμιστεί στη σωστή διεπαφή επικοινωνίας (π.χ. `eth0`).
+### Step 3: Install Unitree SDK2
+1. Download `unitree_sdk2_python` into the Jetson's home directory.
+2. Install the library: `pip3 install -e .`
+3. Verify that `ROBOT_NETWORK_INTERFACE` in `config.py` matches your active interface (e.g., `eth0` or `wlan0`).
 
-### Βήμα 4: Εγκατάσταση Εξαρτήσεων (Μέσα στο Ρομπότ)
-Εγκαταστήστε τα απαραίτητα συστημικά πακέτα και τις βιβλιοθήκες Python:
+### Step 4: System Dependencies
+Install required Linux packages and Python libraries:
 ```bash
 sudo apt update
 sudo apt install ffmpeg pulseaudio alsa-utils
 pip install ultralytics speechrecognition pyaudio requests opencv-python edge-tts
 ```
 
-### Βήμα 5: Παραμετροποίηση & Χειροκίνητη Εκτέλεση
-1. Στο αρχείο `config.py`, ορίστε το `ROBOT_NETWORK_INTERFACE` (συνήθως `eth0`) και το `CAMERA_INDEX` (συνήθως `2` ή `0`).
-2. Στην εφαρμογή Unitree Explore, ενεργοποιήστε το **"Voice Assistant"**. *(Χωρίς αυτό το βήμα, το hardware μικρόφωνο δεν μεταδίδει δεδομένα)*.
-3. Ορίστε το API Key ως μεταβλητή περιβάλλοντος: `export GEMINI_API_KEY="το_κλειδί_σας"`
-4. Εκκινήστε το λογισμικό: `python3 main.py`
+### Step 5: Configuration & Execution
+1. Open the Unitree Explore app and toggle **"Voice Assistant"** ON. *(Without this, the mic will not stream data)*.
+2. Export your Gemini API Key: `export GEMINI_API_KEY="your_api_key_here"`
+3. Run the brain: `python3 main.py`
 
-### Βήμα 6: Εκτέλεση ως Υπηρεσία (Systemd Daemon) - *Προαιρετικό*
-Για πλήρη αυτονομία χωρίς ανάγκη SSH, το σύστημα έχει ρυθμιστεί να εκκινείται αυτόματα κατά την εκκίνηση του ρομπότ. Δημιουργήστε ένα user service αρχείο:
+### Step 6: Run as a Service (Systemd Daemon) - *Optional*
+To make the robot truly autonomous upon boot, create a systemd user service:
 ```bash
 mkdir -p ~/.config/systemd/user/
 nano ~/.config/systemd/user/babis.service
 ```
-*(Προσθέστε το απαραίτητο configuration file, ορίζοντας το API Key σας, το `PULSE_RUNTIME_PATH=/run/user/1000/pulse` και το σωστό path του `main.py`)*.
+*(Configure the service file to include your API Key, set `PULSE_RUNTIME_PATH=/run/user/1000/pulse`, and point to the `main.py` directory).*
 
-Ενεργοποιήστε την υπηρεσία:
+Enable and start the daemon:
 ```bash
 systemctl --user daemon-reload
 systemctl --user enable babis.service
 systemctl --user start babis.service
 ```
-Πλέον το ρομπότ είναι πλήρως αυτόνομο και έτοιμο για αλληλεπίδραση μόλις συνδεθεί στο ρεύμα!
 
 ---
 
-## 🔮 Μελλοντικές Επεκτάσεις (Future Work)
-Η αρχιτεκτονική του κώδικα έχει σχεδιαστεί με γνώμονα την επεκτασιμότητα. Πιθανές μελλοντικές προσθήκες που θα αναβαθμίσουν την αυτονομία του ρομπότ περιλαμβάνουν:
+## 🔮 Future Work
+The software architecture was designed with modular scalability in mind. Potential future upgrades include:
 
-*   **Πολυτροπική Αντίληψη (Multimodal Vision μέσω Gemini):** Αξιοποίηση της ικανότητας του Gemini 1.5 Flash να επεξεργάζεται εικόνα. Αντί να στέλνουμε μόνο κείμενο, το FSM θα μπορεί να κάνει capture ένα frame από την κάμερα τη στιγμή της ερώτησης. Έτσι, το ρομπότ θα μπορεί να απαντά σε ερωτήσεις όπως *"Τι κρατάω στο χέρι μου;"* ή *"Περίγραψε τον χώρο του εργαστηρίου"*.
-*   **Δυναμικός Προσανατολισμός Κορμού (Body Tracking):** Εφόσον το κεφάλι του G1 δεν διαθέτει αρθρώσεις Pitch/Yaw, τα δεδομένα του κέντρου βάρους (`x, y`) από τα Bounding Boxes του YOLOv8 μπορούν να τροφοδοτήσουν το SDK της Unitree. Ο αλγόριθμος θα δίνει εντολή περιστροφής στη μέση του ρομπότ (waist yaw joint) ώστε ο κορμός του να "ακολουθεί" και να γυρίζει πάντα προς τον συνομιλητή.
-*   **LLM-Driven Gestures & Συναισθηματικά LED:** Επέκταση του System Prompt ώστε το Gemini να επιστρέφει κρυφές ετικέτες διάθεσης (π.χ. `[HAPPY]`, `[THINKING]`, `[SURPRISED]`). Το σύστημα θα κάνει parse αυτές τις ετικέτες πριν την εκφώνηση, πυροδοτώντας αντίστοιχες κινήσεις στα χέρια (μέσω SDK) και αλλάζοντας δυναμικά τα χρώματα/μοτίβα των LED.
-*   **Εξατομίκευση & Αναγνώριση Ομιλητή (Speaker Verification):** Ενσωμάτωση ενός ελαφριού νευρωνικού δικτύου (π.χ. SpeechBrain) παράλληλα με το STT, το οποίο θα εξάγει τα βιομετρικά χαρακτηριστικά της φωνής, αναγνωρίζοντας γνωστά μέλη του εργαστηρίου.
-*   **Τοπική Μηχανή Wake-Word (Offline AI):** Αντικατάσταση της μεθόδου `recognize_google` (κατά τον έλεγχο του wake-word) με μια εξειδικευμένη, τοπική λύση (π.χ. Picovoice Porcupine). Αυτό θα μηδενίσει το bandwidth σε κατάσταση Standby (Μπλε LED) και θα προσφέρει ακαριαία απόκριση.
+*   **Multimodal Vision (Gemini 1.5):** Utilizing Gemini's vision capabilities by passing the YOLO bounding box frames directly to the LLM. The robot will be able to answer contextual questions like *"What am I holding?"* or *"Describe the lab environment."*
+*   **Dynamic Body Tracking:** Since the G1 head lacks Pitch/Yaw joints, the center of mass data (`x, y`) from the YOLOv8 bounding boxes can be fed into the SDK. The algorithm will actuate the robot's waist (yaw joint) so the torso continuously tracks and faces the active speaker.
+*   **LLM-Driven Gestures:** Expanding the System Prompt so Gemini returns hidden mood tags (e.g., `[HAPPY]`, `[THINKING]`). A parser will strip these tags before TTS playback and trigger corresponding SDK arm animations and LED patterns.
+*   **Speaker Verification:** Integrating a lightweight neural network (e.g., SpeechBrain) parallel to the STT to extract biometric voice features, allowing the robot to recognize specific lab members by name.
+*   **Local Wake-Word Engine:** Replacing the Google API wake-word check with an offline solution (e.g., Picovoice Porcupine) to achieve zero bandwidth usage during Standby mode and instant trigger response.
