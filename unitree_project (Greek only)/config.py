@@ -1,6 +1,6 @@
 """
 Central configuration file. 
-Keep this synced between the Jetson and the Windows/Cloud client.
+Keep this synced between the Jetson and the Windows/Cloud client .
 """
 
 import os
